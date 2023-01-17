@@ -92,10 +92,71 @@ func ToMiddleware(wrapper func(http.Handler) http.Handler) Middleware {
 	}
 }
 
-func New(log *zap.Logger) *Wool {
+type Option func(*Wool)
+
+func WithLog(log *zap.Logger) Option {
+	return func(w *Wool) {
+		w.Debug = log != nil && zapcore.LevelOf(log.Core()) == zapcore.DebugLevel
+		w.Log = log
+	}
+}
+
+func WithNewCtxFunc(newCtxFunc func(*Wool, *http.Request, http.ResponseWriter) Ctx) Option {
+	return func(w *Wool) {
+		w.NewCtxFunc = newCtxFunc
+	}
+}
+
+func WithHTMLRender(r render.HTMLRender) Option {
+	return func(w *Wool) {
+		w.HTMLRender = r
+	}
+}
+
+func WithNotFoundHandler(h Handler) Option {
+	return func(w *Wool) {
+		w.NotFoundHandler = h
+	}
+}
+
+func WithMethodNotAllowed(h Handler) Option {
+	return func(w *Wool) {
+		w.MethodNotAllowed = h
+	}
+}
+
+func WithOptionsHandler(h Handler) Option {
+	return func(w *Wool) {
+		w.OptionsHandler = h
+	}
+}
+
+func WithErrorHandler(h ErrorHandler) Option {
+	return func(w *Wool) {
+		w.ErrorHandler = h
+	}
+}
+
+func WithErrorTransform(et ErrorTransform) Option {
+	return func(w *Wool) {
+		w.ErrorTransform = et
+	}
+}
+
+func WithValidator(v Validator) Option {
+	return func(w *Wool) {
+		w.Validator = v
+	}
+}
+
+func WithMiddleware(mw ...Middleware) Option {
+	return func(w *Wool) {
+		w.Use(mw...)
+	}
+}
+
+func New(options ...Option) *Wool {
 	wool := &Wool{
-		Debug:            log == nil || zapcore.LevelOf(log.Core()) == zapcore.DebugLevel,
-		Log:              log,
 		NewCtxFunc:       NewCtx,
 		HTMLRender:       &render.HTMLEngine{},
 		NotFoundHandler:  DefaultNotFoundHandler,
@@ -109,6 +170,9 @@ func New(log *zap.Logger) *Wool {
 	}
 	wool.ctxPool.New = func() any {
 		return wool.NewCtx(nil, nil)
+	}
+	for _, opt := range options {
+		opt(wool)
 	}
 	return wool
 }
