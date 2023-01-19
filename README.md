@@ -1,5 +1,7 @@
 # Wool Web Framework
 
+![License](https://img.shields.io/dub/l/vibe-d.svg)
+
 Wool is a web framework written in Go (Golang).
 
 ## Installation
@@ -50,7 +52,7 @@ func (*crud) Panic(c wool.Ctx) error {
 
 func main() {
     log, _ := zap.NewDevelopmentConfig().Build()
-    w := wool.New(log)
+    w := wool.New(wool.WithLog(log))
     w.Use(
         proxy.Middleware(),
         logger.Middleware(logger.Config{
@@ -68,12 +70,17 @@ func main() {
         api.CRUD("/boards", crudHandlers)
     })
     
-    srv := wool.NewServer(wool.ServerConfig{
+    srv := wool.NewServer(&wool.ServerConfig{
         Address: ":8080",
-    }, log)
+    })
+	srv.Log = log
     
-    if err := srv.Start(context.Background(), w); err != nil {
+    if err := srv.StartC(context.Background(), w); err != nil {
         log.Fatal("server error", zap.Error(err))
     }
 }
 ```
+
+## License
+
+Distributed under MIT License, please see license file within the code for more details.

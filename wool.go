@@ -29,7 +29,7 @@ var (
 	}
 
 	DefaultErrorHandler = func(c Ctx, err *Error) error {
-		switch c.NegotiateFormat(MIMEApplicationJSON) {
+		switch c.NegotiateFormat(MIMETextPlain, MIMETextHTML, MIMEApplicationJSON) {
 		case MIMEApplicationJSON:
 			return c.JSON(err.Code, err)
 		default:

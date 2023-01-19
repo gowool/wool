@@ -3,14 +3,16 @@ package wool
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"fmt"
 	"github.com/gowool/wool/internal"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -37,7 +39,7 @@ type ServerConfig struct {
 	GracefulTimeout   time.Duration `mapstructure:"graceful_timeout"`
 }
 
-func (cfg *ServerConfig) init() {
+func (cfg *ServerConfig) Init() {
 	if cfg.Network == "" {
 		cfg.Network = "tcp"
 	}
@@ -49,7 +51,7 @@ func (cfg *ServerConfig) init() {
 	}
 }
 
-func (cfg *ServerConfig) server(handler http.Handler, log *zap.Logger) *http.Server {
+func (cfg *ServerConfig) Server(handler http.Handler, log *zap.Logger) *http.Server {
 	s := &http.Server{
 		Handler:           handler,
 		MaxHeaderBytes:    cfg.MaxHeaderBytes,
@@ -65,67 +67,52 @@ func (cfg *ServerConfig) server(handler http.Handler, log *zap.Logger) *http.Ser
 }
 
 type Server struct {
-	cfg              ServerConfig
-	log              *zap.Logger
-	server           *http.Server
-	CertFilesystem   fs.FS
-	OnShutdownError  func(err error)
-	TLSConfigFunc    func(tlsConfig *tls.Config)
-	ListenerAddrFunc func(addr net.Addr)
-	BeforeServeFunc  func(s *http.Server) error
+	cfg             *ServerConfig
+	server          *http.Server
+	listener        net.Listener
+	Log             *zap.Logger
+	CertFilesystem  fs.FS
+	TLSConfig       func(tlsConfig *tls.Config)
+	ListenerAddr    func(addr net.Addr)
+	BeforeServe     func(s *http.Server) error
+	OnShutdownError func(err error)
 }
 
-func NewServer(cfg ServerConfig, log *zap.Logger) *Server {
-	cfg.init()
+func NewServer(cfg *ServerConfig) *Server {
+	cfg.Init()
 
-	return &Server{
-		cfg: cfg,
-		log: log,
-	}
+	return &Server{cfg: cfg}
 }
 
-func (s *Server) Start(ctx context.Context, handler http.Handler) error {
-	var tlsConfig *tls.Config = nil
-
-	if s.cfg.CertFile != "" && s.cfg.KeyFile != "" {
-		certFs := s.CertFilesystem
-		if certFs == nil {
-			certFs = os.DirFS(".")
-		}
-
-		cert, err := fileContent(s.cfg.CertFile, certFs)
-		if err != nil {
-			return err
-		}
-		key, err := fileContent(s.cfg.KeyFile, certFs)
-		if err != nil {
-			return err
-		}
-		cer, err := tls.X509KeyPair(cert, key)
-		if err != nil {
-			return err
-		}
-		tlsConfig = &tls.Config{Certificates: []tls.Certificate{cer}}
-		if !s.cfg.DisableHTTP2 {
-			tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2")
-		}
-	}
-
-	if s.TLSConfigFunc != nil {
-		if tlsConfig == nil {
-			tlsConfig = &tls.Config{}
-		}
-		s.TLSConfigFunc(tlsConfig)
-	}
-
-	listener, err := s.createListener(tlsConfig)
-	if err != nil {
+func (s *Server) StartC(ctx context.Context, handler http.Handler) error {
+	if err := s.init(handler); err != nil {
 		return err
 	}
 
-	s.server = s.cfg.server(handler, s.log)
+	ctx, cancel := signal.NotifyContext(ctx, StopSignals...)
+	defer cancel()
 
-	return s.serve(ctx, listener)
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(s.serve)
+
+	g.Go(func() error {
+		return s.gracefulShutdown(ctx)
+	})
+
+	if s.Log != nil {
+		s.Log.Debug("press Ctrl+C to stop")
+	}
+
+	return g.Wait()
+}
+
+func (s *Server) Start(handler http.Handler) error {
+	if err := s.init(handler); err != nil {
+		return err
+	}
+
+	return s.serve()
 }
 
 func (s *Server) Close() error {
@@ -142,8 +129,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 				s.OnShutdownError(err)
 				return nil
 			}
-			if s.log != nil {
-				s.log.Error("failed to shutdown server within given timeout", zap.Error(err))
+			if s.Log != nil {
+				s.Log.Error("failed to shutdown server within given timeout", zap.Error(err))
 			}
 			return err
 		}
@@ -151,88 +138,107 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (s *Server) createListener(tlsConfig *tls.Config) (listener net.Listener, err error) {
+func (s *Server) init(handler http.Handler) error {
+	listener, err := s.createListener()
+	if err != nil {
+		return err
+	}
+
+	s.listener = listener
+	s.server = s.cfg.Server(handler, s.Log)
+
+	if s.Log != nil {
+		s.Log.Info("http(s) server starting")
+
+		if !s.cfg.HidePort {
+			s.Log.Info(fmt.Sprintf("http(s) server start on %s", listener.Addr()))
+		}
+	}
+
+	if s.BeforeServe != nil {
+		if err = s.BeforeServe(s.server); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) serve() error {
+	if err := s.server.Serve(s.listener); !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+func (s *Server) createListener() (net.Listener, error) {
+	var tlsConfig *tls.Config = nil
+
+	if s.cfg.CertFile != "" && s.cfg.KeyFile != "" {
+		certFs := s.CertFilesystem
+		if certFs == nil {
+			certFs = os.DirFS(".")
+		}
+
+		cert, err := fileContent(s.cfg.CertFile, certFs)
+		if err != nil {
+			return nil, err
+		}
+		key, err := fileContent(s.cfg.KeyFile, certFs)
+		if err != nil {
+			return nil, err
+		}
+		cer, err := tls.X509KeyPair(cert, key)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig = &tls.Config{Certificates: []tls.Certificate{cer}}
+		if !s.cfg.DisableHTTP2 {
+			tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2")
+		}
+	}
+
+	if s.TLSConfig != nil {
+		if tlsConfig == nil {
+			tlsConfig = &tls.Config{}
+		}
+		s.TLSConfig(tlsConfig)
+	}
+
+	var listener net.Listener
+	var err error
 	if tlsConfig != nil {
 		listener, err = tls.Listen(s.cfg.Network, s.cfg.Address, tlsConfig)
 	} else {
 		listener, err = net.Listen(s.cfg.Network, s.cfg.Address)
 	}
 	if err != nil {
-		return
+		return nil, err
 	}
-	if s.ListenerAddrFunc != nil {
-		s.ListenerAddrFunc(listener.Addr())
+
+	if s.ListenerAddr != nil {
+		s.ListenerAddr(listener.Addr())
 	}
-	return
+
+	return listener, nil
 }
 
-func (s *Server) serve(ctx context.Context, listener net.Listener) (err error) {
-	if s.log != nil {
-		s.log.Info("http(s) server starting")
-	}
-
-	if s.BeforeServeFunc != nil {
-		if err = s.BeforeServeFunc(s.server); err != nil {
-			return
-		}
-	}
-
-	if !s.cfg.HidePort && s.log != nil {
-		s.log.Sugar().Infof("http(s) server started on %s", listener.Addr())
-	}
-
-	if ctx == nil {
-		if err = s.server.Serve(listener); err == http.ErrServerClosed {
-			return nil
-		}
-		return
-	}
-
-	if s.log != nil {
-		s.log.Debug("press Ctrl+C to stop")
-	}
-
-	ctx, cancel := signal.NotifyContext(ctx, StopSignals...)
-	defer cancel()
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		s.gracefulShutdown(ctx)
-	}()
-
-	go func() {
-		defer wg.Done()
-		if err = s.server.Serve(listener); err == http.ErrServerClosed {
-			err = nil
-		}
-	}()
-
-	wg.Wait()
-	return
-}
-
-func (s *Server) gracefulShutdown(ctx context.Context) {
+func (s *Server) gracefulShutdown(ctx context.Context) error {
 	<-ctx.Done()
 
-	if s.log != nil {
-		s.log.Info("http(s) server stopping")
-		defer s.log.Info("http(s) server stopped")
-	}
+	forceCtx, cancel1 := signal.NotifyContext(context.Background(), StopSignals...)
+	defer cancel1()
 
-	shutdownCtx, cancel := signal.NotifyContext(context.Background(), StopSignals...)
-	defer cancel()
-
-	shutdownCtx, cancel2 := context.WithTimeout(shutdownCtx, s.cfg.GracefulTimeout)
+	forceCtx, cancel2 := context.WithTimeout(forceCtx, s.cfg.GracefulTimeout)
 	defer cancel2()
 
-	if s.log != nil {
-		s.log.Debug("press Ctrl+C to force stopping")
+	if s.Log != nil {
+		s.Log.Info("http(s) server stopping")
+		s.Log.Debug("press Ctrl+C to force stopping")
+		defer s.Log.Info("http(s) server stopped")
 	}
 
-	_ = s.Shutdown(shutdownCtx)
+	return s.Shutdown(forceCtx)
 }
 
 func fileContent(cert string, certFilesystem fs.FS) (content []byte, err error) {

@@ -9,7 +9,7 @@ import (
 
 func main() {
 	log, _ := zap.NewDevelopmentConfig().Build()
-	w := wool.New(log)
+	w := wool.New(wool.WithLog(log))
 	w.MountHealth()
 	w.Group("/api/v1", func(v1 *wool.Wool) {
 		v1.Group("/foo", func(foo *wool.Wool) {
@@ -32,11 +32,12 @@ func main() {
 		})
 	})
 
-	srv := wool.NewServer(wool.ServerConfig{
+	srv := wool.NewServer(&wool.ServerConfig{
 		Address: ":8080",
-	}, log)
+	})
+	srv.Log = log
 
-	if err := srv.Start(context.Background(), w); err != nil {
+	if err := srv.StartC(context.Background(), w); err != nil {
 		log.Fatal("server error", zap.Error(err))
 	}
 }

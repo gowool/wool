@@ -77,7 +77,7 @@ func (r *Request) IsTLS() bool {
 }
 
 func (r *Request) PathParams() PathParams {
-	return paramsFromContext(r.Context())
+	return ParamsFromContext(r.Context())
 }
 
 func (r *Request) PathParam(param string) string {
