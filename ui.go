@@ -21,12 +21,9 @@ func (fsw *UIAssetWrapper) Open(name string) (http.File, error) {
 	return nil, err
 }
 
-func HandleUI(pattern string, h http.Handler) http.Handler {
+func HandleUI(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		path := req.URL.Path
-		if pattern != "" {
-			req.URL.Path = strings.TrimPrefix(req.URL.Path, pattern)
-		}
 		req.URL.Path = strings.TrimSuffix(req.URL.Path, "/")
 		h.ServeHTTP(w, req)
 		req.URL.Path = path
@@ -39,7 +36,7 @@ func UIFileServer(fs http.FileSystem) http.Handler {
 }
 
 func (wool *Wool) UI(pattern string, fs http.FileSystem, methods ...string) {
-	handler := ToHandler(HandleUI(pattern, UIFileServer(fs)))
+	handler := ToHandler(HandleUI(UIFileServer(fs)))
 
 	wool.Add(pattern, handler, methods...)
 	wool.Add(pattern+"/...", handler, methods...)
