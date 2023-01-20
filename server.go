@@ -151,7 +151,7 @@ func (s *Server) init(handler http.Handler) error {
 		s.Log.Info("http(s) server starting")
 
 		if !s.cfg.HidePort {
-			s.Log.Info(fmt.Sprintf("http(s) server start on %s", listener.Addr()))
+			s.Log.Info(fmt.Sprintf("http(s) server started on %s", listener.Addr()))
 		}
 	}
 
