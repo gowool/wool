@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/goccy/go-json"
 	"github.com/spf13/cast"
-	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -35,14 +34,11 @@ func (c *DefaultCtx) BindBody(i any) error {
 	return NewErrBadRequest(nil)
 }
 
-func (c *DefaultCtx) BindJSON(i any) (err error) {
-	var data []byte
-	if data, err = io.ReadAll(c.Req().Body); err == nil {
-		if err = json.Unmarshal(data, i); err == nil {
-			return
-		}
+func (c *DefaultCtx) BindJSON(i any) error {
+	if err := json.NewDecoder(c.Req().Body).Decode(i); err != nil {
+		return NewErrBadRequest(err)
 	}
-	return NewErrBadRequest(err)
+	return nil
 }
 
 func (c *DefaultCtx) BindForm(i any) (err error) {
