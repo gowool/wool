@@ -1,7 +1,6 @@
 package wool
 
 import (
-	"go.uber.org/zap"
 	"net/http"
 	"sync"
 )
@@ -10,7 +9,6 @@ type Ctx interface {
 	CtxRender
 	CtxBinding
 	Debug() bool
-	Log() *zap.Logger
 	Store() map[string]any
 	Set(key string, value any)
 	Get(key string) any
@@ -37,10 +35,6 @@ func NewCtx(wool *Wool, r *http.Request, w http.ResponseWriter) Ctx {
 
 func (c *DefaultCtx) Debug() bool {
 	return c.wool.Debug
-}
-
-func (c *DefaultCtx) Log() *zap.Logger {
-	return c.wool.Log
 }
 
 func (c *DefaultCtx) Store() map[string]any {

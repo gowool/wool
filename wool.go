@@ -4,8 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gowool/wool/render"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"golang.org/x/exp/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -58,7 +57,6 @@ type (
 
 type Wool struct {
 	Debug            bool
-	Log              *zap.Logger
 	NewCtxFunc       func(wool *Wool, r *http.Request, w http.ResponseWriter) Ctx
 	HTMLRender       render.HTMLRender
 	NotFoundHandler  Handler
@@ -93,13 +91,6 @@ func ToMiddleware(wrapper func(http.Handler) http.Handler) Middleware {
 }
 
 type Option func(*Wool)
-
-func WithLog(log *zap.Logger) Option {
-	return func(w *Wool) {
-		w.Debug = log != nil && zapcore.LevelOf(log.Core()) == zapcore.DebugLevel
-		w.Log = log
-	}
-}
 
 func WithNewCtxFunc(newCtxFunc func(*Wool, *http.Request, http.ResponseWriter) Ctx) Option {
 	return func(w *Wool) {
@@ -157,6 +148,7 @@ func WithMiddleware(mw ...Middleware) Option {
 
 func New(options ...Option) *Wool {
 	wool := &Wool{
+		Debug:            Logger().Enabled(slog.LevelDebug),
 		NewCtxFunc:       NewCtx,
 		HTMLRender:       &render.HTMLEngine{},
 		NotFoundHandler:  DefaultNotFoundHandler,
@@ -215,10 +207,8 @@ func (wool *Wool) Error(next Handler) Handler {
 				e.Developer = e.Internal.Error()
 			}
 
-			if err = wool.ErrorHandler(c, e); err != nil && c.Log() != nil {
-				if c.Log() != nil {
-					c.Log().Error("UNKNOWN ERROR", zap.Error(err))
-				}
+			if err = wool.ErrorHandler(c, e); err != nil {
+				Logger().Error("UNKNOWN ERROR", err)
 			}
 
 			return e
@@ -236,10 +226,6 @@ func (wool *Wool) Recover(next Handler) Handler {
 					err = fmt.Errorf("%v", r)
 				}
 
-				if c.Log() == nil {
-					return
-				}
-
 				var brokenPipe bool
 				if ne, ok := r.(*net.OpError); ok {
 					if se, ok := ne.Err.(*os.SyscallError); ok {
@@ -252,10 +238,7 @@ func (wool *Wool) Recover(next Handler) Handler {
 
 				httpRequest, _ := httputil.DumpRequest(c.Req().Request, false)
 				if brokenPipe {
-					c.Log().Error(c.Req().URL.Path,
-						zap.Error(err),
-						zap.ByteString("request", httpRequest),
-					)
+					Logger().Error(c.Req().URL.Path, err, "request", string(httpRequest))
 					return
 				}
 
@@ -263,11 +246,7 @@ func (wool *Wool) Recover(next Handler) Handler {
 				length := runtime.Stack(stack, true)
 				stack = stack[:length]
 
-				c.Log().Error("recover from panic",
-					zap.Error(err),
-					zap.ByteString("request", httpRequest),
-					zap.ByteString("stack", stack),
-				)
+				Logger().Error("recover from panic", err, "request", string(httpRequest), "stack", string(stack))
 			}
 		}()
 

@@ -2,7 +2,6 @@ package wool
 
 import (
 	"context"
-	"go.uber.org/zap"
 	"net/http"
 	"regexp"
 	"strings"
@@ -64,9 +63,7 @@ func (wool *Wool) Add(pattern string, handler Handler, methods ...string) {
 		}
 	}
 
-	if wool.Log != nil {
-		wool.Log.Info("handler registered", zap.String("pattern", pattern), zap.Strings("methods", methods))
-	}
+	Logger().Info("handler registered", "pattern", pattern, "methods", methods)
 }
 
 func ParamsFromContext(ctx context.Context) PathParams {

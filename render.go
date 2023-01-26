@@ -3,7 +3,6 @@ package wool
 import (
 	"errors"
 	"github.com/gowool/wool/render"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 )
@@ -86,9 +85,7 @@ func (c *DefaultCtx) Stream(step func(w io.Writer) error) error {
 				c.Res().Flush()
 				return nil
 			default:
-				if c.Log() != nil {
-					c.Log().Error("stream error", zap.Error(err))
-				}
+				Logger().Error("stream error", err)
 				return err
 			}
 		}

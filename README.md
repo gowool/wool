@@ -28,11 +28,12 @@ package main
 import (
     "context"
     "net/http"
+	"os"
     
     "github.com/gowool/middleware/logger"
     "github.com/gowool/middleware/proxy"
     "github.com/gowool/wool"
-    "go.uber.org/zap"
+	"golang.org/x/exp/slog"
 )
 
 type crud struct {
@@ -50,9 +51,19 @@ func (*crud) Panic(c wool.Ctx) error {
     panic("panic message")
 }
 
+func init() {
+	opts := slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}
+
+	logger := slog.New(opts.NewTextHandler(os.Stdout))
+
+	slog.SetDefault(logger)
+	wool.SetLogger(logger)
+}
+
 func main() {
-    log, _ := zap.NewDevelopmentConfig().Build()
-    w := wool.New(wool.WithLog(log))
+    w := wool.New()
     w.Use(
         proxy.Middleware(),
         logger.Middleware(logger.Config{
@@ -73,10 +84,10 @@ func main() {
     srv := wool.NewServer(&wool.ServerConfig{
         Address: ":8080",
     })
-	srv.Log = log
     
     if err := srv.StartC(context.Background(), w); err != nil {
-        log.Fatal("server error", zap.Error(err))
+		wool.Logger().Error("server error", err)
+		os.Exit(1)
     }
 }
 ```

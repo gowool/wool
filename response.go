@@ -2,8 +2,8 @@ package wool
 
 import (
 	"bufio"
+	"fmt"
 	"github.com/gowool/wool/internal"
-	"log"
 	"net"
 	"net/http"
 )
@@ -71,9 +71,7 @@ func (r *response) Written() bool {
 func (r *response) WriteHeader(status int) {
 	if status > 0 && r.status != status {
 		if r.Written() {
-			log.SetPrefix("[WARN] ")
-			log.Printf("Headers were already written. Wanted to override status code %d with %d\n", r.status, status)
-			log.SetPrefix("")
+			Logger().Warn(fmt.Sprintf("Headers were already written. Wanted to override status code %d with %d\n", r.status, status))
 			return
 		}
 		r.status = status

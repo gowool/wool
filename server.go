@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gowool/wool/internal"
-	"go.uber.org/zap"
+	"golang.org/x/exp/slog"
 	"golang.org/x/sync/errgroup"
 	"io/fs"
 	"net"
@@ -51,8 +51,8 @@ func (cfg *ServerConfig) Init() {
 	}
 }
 
-func (cfg *ServerConfig) Server(handler http.Handler, log *zap.Logger) *http.Server {
-	s := &http.Server{
+func (cfg *ServerConfig) Server(handler http.Handler) *http.Server {
+	return &http.Server{
 		Handler:           handler,
 		MaxHeaderBytes:    cfg.MaxHeaderBytes,
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
@@ -60,17 +60,13 @@ func (cfg *ServerConfig) Server(handler http.Handler, log *zap.Logger) *http.Ser
 		WriteTimeout:      cfg.WriteTimeout,
 		IdleTimeout:       cfg.IdleTimeout,
 	}
-	if log != nil {
-		s.ErrorLog = zap.NewStdLog(log)
-	}
-	return s
 }
 
 type Server struct {
 	cfg             *ServerConfig
 	server          *http.Server
 	listener        net.Listener
-	Log             *zap.Logger
+	Log             *slog.Logger
 	CertFilesystem  fs.FS
 	TLSConfig       func(tlsConfig *tls.Config)
 	ListenerAddr    func(addr net.Addr)
@@ -81,7 +77,7 @@ type Server struct {
 func NewServer(cfg *ServerConfig) *Server {
 	cfg.Init()
 
-	return &Server{cfg: cfg}
+	return &Server{cfg: cfg, Log: Logger().WithGroup("server")}
 }
 
 func (s *Server) StartC(ctx context.Context, handler http.Handler) error {
@@ -100,9 +96,7 @@ func (s *Server) StartC(ctx context.Context, handler http.Handler) error {
 		return s.gracefulShutdown(ctx)
 	})
 
-	if s.Log != nil {
-		s.Log.Debug("press Ctrl+C to stop")
-	}
+	s.Log.Debug("press Ctrl+C to stop")
 
 	return g.Wait()
 }
@@ -129,9 +123,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 				s.OnShutdownError(err)
 				return nil
 			}
-			if s.Log != nil {
-				s.Log.Error("failed to shutdown server within given timeout", zap.Error(err))
-			}
+			s.Log.Error("failed to shutdown server within given timeout", err)
 			return err
 		}
 	}
@@ -145,14 +137,12 @@ func (s *Server) init(handler http.Handler) error {
 	}
 
 	s.listener = listener
-	s.server = s.cfg.Server(handler, s.Log)
+	s.server = s.cfg.Server(handler)
 
-	if s.Log != nil {
-		s.Log.Info("http(s) server starting")
+	s.Log.Info("http(s) server starting")
 
-		if !s.cfg.HidePort {
-			s.Log.Info(fmt.Sprintf("http(s) server started on %s", listener.Addr()))
-		}
+	if !s.cfg.HidePort {
+		s.Log.Info(fmt.Sprintf("http(s) server started on %s", listener.Addr()))
 	}
 
 	if s.BeforeServe != nil {
@@ -232,11 +222,10 @@ func (s *Server) gracefulShutdown(ctx context.Context) error {
 	forceCtx, cancel2 := context.WithTimeout(forceCtx, s.cfg.GracefulTimeout)
 	defer cancel2()
 
-	if s.Log != nil {
-		s.Log.Info("http(s) server stopping")
-		s.Log.Debug("press Ctrl+C to force stopping")
-		defer s.Log.Info("http(s) server stopped")
-	}
+	s.Log.Info("http(s) server stopping")
+	s.Log.Debug("press Ctrl+C to force stopping")
+
+	defer s.Log.Info("http(s) server stopped")
 
 	return s.Shutdown(forceCtx)
 }
