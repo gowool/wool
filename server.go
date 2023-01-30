@@ -93,7 +93,9 @@ func (s *Server) StartC(ctx context.Context, handler http.Handler) error {
 	g.Go(s.serve)
 
 	g.Go(func() error {
-		return s.gracefulShutdown(ctx)
+		<-ctx.Done()
+
+		return s.GracefulShutdown(context.Background())
 	})
 
 	s.Log.Debug("press Ctrl+C to stop")
@@ -123,7 +125,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 				s.OnShutdownError(err)
 				return nil
 			}
+
 			s.Log.Error("failed to shutdown server within given timeout", err)
+
 			return err
 		}
 	}
@@ -213,13 +217,11 @@ func (s *Server) createListener() (net.Listener, error) {
 	return listener, nil
 }
 
-func (s *Server) gracefulShutdown(ctx context.Context) error {
-	<-ctx.Done()
-
-	forceCtx, cancel1 := signal.NotifyContext(context.Background(), StopSignals...)
+func (s *Server) GracefulShutdown(ctx context.Context) error {
+	ctx, cancel1 := signal.NotifyContext(ctx, StopSignals...)
 	defer cancel1()
 
-	forceCtx, cancel2 := context.WithTimeout(forceCtx, s.cfg.GracefulTimeout)
+	ctx, cancel2 := context.WithTimeout(ctx, s.cfg.GracefulTimeout)
 	defer cancel2()
 
 	s.Log.Info("http(s) server stopping")
@@ -227,7 +229,7 @@ func (s *Server) gracefulShutdown(ctx context.Context) error {
 
 	defer s.Log.Info("http(s) server stopped")
 
-	return s.Shutdown(forceCtx)
+	return s.Shutdown(ctx)
 }
 
 func fileContent(cert string, certFilesystem fs.FS) (content []byte, err error) {
