@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -63,6 +64,8 @@ func (cfg *ServerConfig) Server(handler http.Handler) *http.Server {
 }
 
 type Server struct {
+	sync.Mutex
+
 	cfg             *ServerConfig
 	server          *http.Server
 	listener        net.Listener
@@ -119,6 +122,9 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	s.Lock()
+	defer s.Unlock()
+
 	if s.server != nil {
 		if err := s.server.Shutdown(ctx); err != nil {
 			if s.OnShutdownError != nil {
@@ -135,6 +141,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) init(handler http.Handler) error {
+	s.Lock()
+	defer s.Unlock()
+
 	listener, err := s.createListener()
 	if err != nil {
 		return err
@@ -159,7 +168,11 @@ func (s *Server) init(handler http.Handler) error {
 }
 
 func (s *Server) serve() error {
-	if err := s.server.Serve(s.listener); !errors.Is(err, http.ErrServerClosed) {
+	s.Lock()
+	srv := s.server
+	s.Unlock()
+
+	if err := srv.Serve(s.listener); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
