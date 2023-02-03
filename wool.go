@@ -136,6 +136,12 @@ func WithErrorTransform(et ErrorTransform) Option {
 	}
 }
 
+func WithErrorServe(es ErrorServe) Option {
+	return func(w *Wool) {
+		w.ErrorServe = es
+	}
+}
+
 func WithValidator(v Validator) Option {
 	return func(w *Wool) {
 		w.Validator = v
