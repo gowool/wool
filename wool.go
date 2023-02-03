@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -53,7 +54,7 @@ type (
 	Middleware     func(next Handler) Handler
 	ErrorHandler   func(c Ctx, err *Error) error
 	ErrorTransform func(err error) *Error
-	ErrorServe     func(err error)
+	AfterServe     func(c Ctx, start, end time.Time, err error)
 )
 
 type Wool struct {
@@ -65,7 +66,7 @@ type Wool struct {
 	OptionsHandler   Handler
 	ErrorHandler     ErrorHandler
 	ErrorTransform   ErrorTransform
-	ErrorServe       ErrorServe
+	AfterServe       AfterServe
 	Validator        Validator
 	middlewares      []Middleware
 	ctxPool          *sync.Pool
@@ -136,9 +137,9 @@ func WithErrorTransform(et ErrorTransform) Option {
 	}
 }
 
-func WithErrorServe(es ErrorServe) Option {
+func WithAfterServe(as AfterServe) Option {
 	return func(w *Wool) {
-		w.ErrorServe = es
+		w.AfterServe = as
 	}
 }
 
@@ -203,8 +204,17 @@ func (wool *Wool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := wool.AcquireCtx()
 	c.Reset(r, w)
 
-	if err := wool.serve(c); err != nil && wool.ErrorServe != nil {
-		wool.ErrorServe(err)
+	var start, end time.Time
+
+	if wool.AfterServe != nil {
+		start = time.Now()
+	}
+
+	err := wool.serve(c)
+
+	if wool.AfterServe != nil {
+		end = time.Now()
+		wool.AfterServe(c, start, end, err)
 	}
 
 	wool.ReleaseCtx(c)
