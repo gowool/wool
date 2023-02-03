@@ -283,12 +283,12 @@ func (wool *Wool) serve(c Ctx) error {
 }
 
 func (wool *Wool) wrap(handler Handler) Handler {
-	handler = wool.Recover(handler)
-	handler = wool.Error(handler)
-
 	for i := len(wool.middlewares) - 1; i >= 0; i-- {
 		handler = wool.middlewares[i](handler)
 	}
+
+	handler = wool.Recover(handler)
+	handler = wool.Error(handler)
 
 	return handler
 }
