@@ -53,6 +53,7 @@ type (
 	Middleware     func(next Handler) Handler
 	ErrorHandler   func(c Ctx, err *Error) error
 	ErrorTransform func(err error) *Error
+	ErrorServe     func(err error)
 )
 
 type Wool struct {
@@ -64,6 +65,7 @@ type Wool struct {
 	OptionsHandler   Handler
 	ErrorHandler     ErrorHandler
 	ErrorTransform   ErrorTransform
+	ErrorServe       ErrorServe
 	Validator        Validator
 	middlewares      []Middleware
 	ctxPool          *sync.Pool
@@ -194,7 +196,11 @@ func (wool *Wool) ReleaseCtx(c Ctx) {
 func (wool *Wool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := wool.AcquireCtx()
 	c.Reset(r, w)
-	_ = wool.serve(c)
+
+	if err := wool.serve(c); err != nil && wool.ErrorServe != nil {
+		wool.ErrorServe(err)
+	}
+
 	wool.ReleaseCtx(c)
 }
 
