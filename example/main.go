@@ -24,16 +24,16 @@ func main() {
 	w.MountHealth()
 	w.Group("/api/v1", func(v1 *wool.Wool) {
 		v1.Group("/foo", func(foo *wool.Wool) {
-			foo.Get("", func(c wool.Ctx) error {
+			foo.GET("", func(c wool.Ctx) error {
 				return c.JSON(http.StatusOK, wool.Map{
 					"handler": "foo",
 					"action":  "list",
 				})
 			})
-			foo.Get("/no", func(c wool.Ctx) error {
+			foo.GET("/no", func(c wool.Ctx) error {
 				return c.NoContent()
 			})
-			foo.Get("/:id", func(c wool.Ctx) error {
+			foo.GET("/:id", func(c wool.Ctx) error {
 				return c.JSON(http.StatusOK, wool.Map{
 					"handler": "foo",
 					"action":  "take",
