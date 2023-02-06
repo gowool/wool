@@ -76,7 +76,7 @@ func main() {
     
     w.Group("/api/v1", func(api *wool.Wool) {
         api.Group("/boards", func(b *wool.Wool) {
-            b.Get("/panic", crudHandlers.Panic)
+            b.GET("/panic", crudHandlers.Panic)
         })
         api.CRUD("/boards", crudHandlers)
     })
