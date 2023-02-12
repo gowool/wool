@@ -28,6 +28,7 @@ var StopSignals = []os.Signal{
 type ServerConfig struct {
 	DisableHTTP2      bool          `mapstructure:"disable_http2"`
 	HidePort          bool          `mapstructure:"hide_port"`
+	CertPath          string        `mapstructure:"cert_path"`
 	CertFile          string        `mapstructure:"cert_file"`
 	KeyFile           string        `mapstructure:"key_file"`
 	Address           string        `mapstructure:"address"`
@@ -41,6 +42,9 @@ type ServerConfig struct {
 }
 
 func (cfg *ServerConfig) Init() {
+	if cfg.CertPath == "" {
+		cfg.CertPath = "."
+	}
 	if cfg.Network == "" {
 		cfg.Network = "tcp"
 	}
@@ -184,7 +188,7 @@ func (s *Server) createListener() (net.Listener, error) {
 	if s.cfg.CertFile != "" && s.cfg.KeyFile != "" {
 		certFs := s.CertFilesystem
 		if certFs == nil {
-			certFs = os.DirFS(".")
+			certFs = os.DirFS(s.cfg.CertPath)
 		}
 
 		cert, err := fileContent(s.cfg.CertFile, certFs)
