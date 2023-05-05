@@ -30,7 +30,6 @@ import (
     "net/http"
 	"os"
     
-    "github.com/gowool/middleware/logger"
     "github.com/gowool/middleware/proxy"
     "github.com/gowool/wool"
 	"golang.org/x/exp/slog"
@@ -55,12 +54,7 @@ func main() {
 	l := slog.New(slog.HandlerOptions{Level: slog.LevelDebug}.NewJSONHandler(os.Stdout))
 
 	w := wool.New(l.WithGroup("wool"))
-    w.Use(
-        proxy.Middleware(),
-        logger.Middleware(logger.Config{
-            ExcludeRegexEndpoint: "^/favicon.ico",
-        }),
-    )
+    w.Use(proxy.Middleware())
     w.MountHealth()
     
     crudHandlers := new(crud)
