@@ -34,7 +34,7 @@ func NewCtx(wool *Wool, r *http.Request, w http.ResponseWriter) Ctx {
 }
 
 func (c *DefaultCtx) Debug() bool {
-	return c.wool.Debug
+	return c.wool.Debug(c.Req().Context())
 }
 
 func (c *DefaultCtx) Store() map[string]any {
@@ -83,7 +83,7 @@ func (c *DefaultCtx) SetRes(res Response) {
 
 func (c *DefaultCtx) Reset(r *http.Request, w http.ResponseWriter) {
 	c.req = &Request{Request: r}
-	c.res = NewResponse(w)
+	c.res = NewResponse(w, c.wool.Log)
 	c.store = nil
 }
 

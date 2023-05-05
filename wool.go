@@ -1,6 +1,7 @@
 package wool
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gowool/wool/render"
@@ -58,7 +59,7 @@ type (
 )
 
 type Wool struct {
-	Debug            bool
+	Log              *slog.Logger
 	NewCtxFunc       func(wool *Wool, r *http.Request, w http.ResponseWriter) Ctx
 	HTMLRender       render.HTMLRender
 	NotFoundHandler  Handler
@@ -155,9 +156,13 @@ func WithMiddleware(mw ...Middleware) Option {
 	}
 }
 
-func New(options ...Option) *Wool {
+func New(logger *slog.Logger, options ...Option) *Wool {
+	if logger == nil {
+		panic("logger is nil")
+	}
+
 	wool := &Wool{
-		Debug:            Logger().Enabled(slog.LevelDebug),
+		Log:              logger,
 		NewCtxFunc:       NewCtx,
 		HTMLRender:       &render.HTMLEngine{},
 		NotFoundHandler:  DefaultNotFoundHandler,
@@ -176,6 +181,10 @@ func New(options ...Option) *Wool {
 		opt(wool)
 	}
 	return wool
+}
+
+func (wool *Wool) Debug(ctx context.Context) bool {
+	return wool.Log.Enabled(ctx, slog.LevelDebug)
 }
 
 func (wool *Wool) NewCtx(r *http.Request, w http.ResponseWriter) Ctx {
@@ -230,7 +239,7 @@ func (wool *Wool) Error(next Handler) Handler {
 			}
 
 			if err = wool.ErrorHandler(c, e); err != nil {
-				Logger().Error("UNKNOWN ERROR", err)
+				wool.Log.Error("UNKNOWN ERROR", err)
 			}
 
 			return e
@@ -260,7 +269,7 @@ func (wool *Wool) Recover(next Handler) Handler {
 
 				httpRequest, _ := httputil.DumpRequest(c.Req().Request, false)
 				if brokenPipe {
-					Logger().Error(c.Req().URL.Path, err, "request", string(httpRequest))
+					wool.Log.Error(c.Req().URL.Path, err, "request", string(httpRequest))
 					return
 				}
 
@@ -268,7 +277,7 @@ func (wool *Wool) Recover(next Handler) Handler {
 				length := runtime.Stack(stack, true)
 				stack = stack[:length]
 
-				Logger().Error("recover from panic", err, "request", string(httpRequest), "stack", string(stack))
+				wool.Log.Error("recover from panic", err, "request", string(httpRequest), "stack", string(stack))
 			}
 		}()
 

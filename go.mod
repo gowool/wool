@@ -6,7 +6,7 @@ require (
 	github.com/go-playground/validator/v10 v10.12.0
 	github.com/goccy/go-json v0.10.2
 	github.com/spf13/cast v1.5.0
-	golang.org/x/exp v0.0.0-20230125214544-b3c2aaf6208d
+	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53
 	golang.org/x/sync v0.1.0
 )
 

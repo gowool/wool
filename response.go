@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/gowool/wool/internal"
+	"golang.org/x/exp/slog"
 	"net"
 	"net/http"
 )
@@ -31,10 +32,11 @@ type response struct {
 	http.ResponseWriter
 	status int
 	size   int64
+	logger *slog.Logger
 }
 
-func NewResponse(w http.ResponseWriter) Response {
-	return &response{ResponseWriter: w, status: defaultStatus, size: noWritten}
+func NewResponse(w http.ResponseWriter, logger *slog.Logger) Response {
+	return &response{ResponseWriter: w, status: defaultStatus, size: noWritten, logger: logger}
 }
 
 func (r *response) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -71,7 +73,9 @@ func (r *response) Written() bool {
 func (r *response) WriteHeader(status int) {
 	if status > 0 && r.status != status {
 		if r.Written() {
-			Logger().Warn(fmt.Sprintf("Headers were already written. Wanted to override status code %d with %d\n", r.status, status))
+			if r.logger != nil {
+				r.logger.Warn(fmt.Sprintf("Headers were already written. Wanted to override status code %d with %d\n", r.status, status))
+			}
 			return
 		}
 		r.status = status

@@ -63,7 +63,7 @@ func (wool *Wool) Add(pattern string, handler Handler, methods ...string) {
 		}
 	}
 
-	Logger().Info("handler registered", "pattern", pattern, "methods", methods)
+	wool.Log.Info("handler registered", "pattern", pattern, "methods", methods)
 }
 
 func ParamsFromContext(ctx context.Context) PathParams {

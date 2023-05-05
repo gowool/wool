@@ -8,19 +8,10 @@ import (
 	"os"
 )
 
-func init() {
-	opts := slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}
-
-	logger := slog.New(opts.NewTextHandler(os.Stdout))
-
-	slog.SetDefault(logger)
-	wool.SetLogger(logger)
-}
-
 func main() {
-	w := wool.New()
+	logger := slog.New(slog.HandlerOptions{Level: slog.LevelDebug}.NewJSONHandler(os.Stdout))
+
+	w := wool.New(logger.WithGroup("wool"))
 	w.MountHealth()
 	w.Group("/api/v1", func(v1 *wool.Wool) {
 		v1.Group("/foo", func(foo *wool.Wool) {
@@ -45,10 +36,10 @@ func main() {
 
 	srv := wool.NewServer(&wool.ServerConfig{
 		Address: ":8080",
-	})
+	}, logger.WithGroup("server"))
 
 	if err := srv.StartC(context.Background(), w); err != nil {
-		wool.Logger().Error("server error", err)
+		srv.Log.Error("server error", err)
 		os.Exit(1)
 	}
 }

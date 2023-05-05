@@ -81,10 +81,10 @@ type Server struct {
 	OnShutdownError func(err error)
 }
 
-func NewServer(cfg *ServerConfig) *Server {
+func NewServer(cfg *ServerConfig, logger *slog.Logger) *Server {
 	cfg.Init()
 
-	return &Server{cfg: cfg, Log: Logger().WithGroup("server")}
+	return &Server{cfg: cfg, Log: logger.WithGroup("server")}
 }
 
 func (s *Server) StartC(ctx context.Context, handler http.Handler) error {

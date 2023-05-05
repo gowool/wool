@@ -51,19 +51,10 @@ func (*crud) Panic(c wool.Ctx) error {
     panic("panic message")
 }
 
-func init() {
-	opts := slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}
-
-	logger := slog.New(opts.NewTextHandler(os.Stdout))
-
-	slog.SetDefault(logger)
-	wool.SetLogger(logger)
-}
-
 func main() {
-    w := wool.New()
+	l := slog.New(slog.HandlerOptions{Level: slog.LevelDebug}.NewJSONHandler(os.Stdout))
+
+	w := wool.New(l.WithGroup("wool"))
     w.Use(
         proxy.Middleware(),
         logger.Middleware(logger.Config{
@@ -83,10 +74,10 @@ func main() {
     
     srv := wool.NewServer(&wool.ServerConfig{
         Address: ":8080",
-    })
+    }, l.WithGroup("server"))
     
     if err := srv.StartC(context.Background(), w); err != nil {
-		wool.Logger().Error("server error", err)
+		srv.Log.Error("server error", err)
 		os.Exit(1)
     }
 }
