@@ -71,7 +71,7 @@ func main() {
     }, l.WithGroup("server"))
     
     if err := srv.StartC(context.Background(), w); err != nil {
-		srv.Log.Error("server error", err)
+		srv.Log.Error("server error", "err", err)
 		os.Exit(1)
     }
 }

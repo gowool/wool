@@ -239,7 +239,7 @@ func (wool *Wool) Error(next Handler) Handler {
 			}
 
 			if err = wool.ErrorHandler(c, e); err != nil {
-				wool.Log.Error("UNKNOWN ERROR", err)
+				wool.Log.Error("UNKNOWN ERROR", "err", err)
 			}
 
 			return e
@@ -269,7 +269,7 @@ func (wool *Wool) Recover(next Handler) Handler {
 
 				httpRequest, _ := httputil.DumpRequest(c.Req().Request, false)
 				if brokenPipe {
-					wool.Log.Error(c.Req().URL.Path, err, "request", string(httpRequest))
+					wool.Log.Error(c.Req().URL.Path, "err", err, "request", string(httpRequest))
 					return
 				}
 
@@ -277,7 +277,7 @@ func (wool *Wool) Recover(next Handler) Handler {
 				length := runtime.Stack(stack, true)
 				stack = stack[:length]
 
-				wool.Log.Error("recover from panic", err, "request", string(httpRequest), "stack", string(stack))
+				wool.Log.Error("recover from panic", "err", err, "request", string(httpRequest), "stack", string(stack))
 			}
 		}()
 

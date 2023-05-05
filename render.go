@@ -85,7 +85,7 @@ func (c *DefaultCtx) Stream(step func(w io.Writer) error) error {
 				c.Res().Flush()
 				return nil
 			default:
-				c.wool.Log.Error("stream error", err)
+				c.wool.Log.Error("stream error", "err", err)
 				return err
 			}
 		}

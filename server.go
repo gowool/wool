@@ -136,7 +136,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 				return nil
 			}
 
-			s.Log.Error("failed to shutdown server within given timeout", err)
+			s.Log.Error("failed to shutdown server within given timeout", "err", err)
 
 			return err
 		}
