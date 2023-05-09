@@ -23,8 +23,19 @@ func (fsw *UIAssetWrapper) Open(name string) (http.File, error) {
 
 func HandleUI(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// do not allow paths like ../../resource
+		// only specified folder and resources in it
+		// https://lgtm.com/rules/1510366186013/
+		if strings.Contains(req.URL.Path, "..") {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
 		path := req.URL.Path
-		req.URL.Path = strings.TrimSuffix(req.URL.Path, "/")
+		fp := strings.TrimSuffix(path, "/")
+		fp = strings.ReplaceAll(fp, "\n", "")
+		fp = strings.ReplaceAll(fp, "\r", "")
+		req.URL.Path = fp
 		h.ServeHTTP(w, req)
 		req.URL.Path = path
 		return
